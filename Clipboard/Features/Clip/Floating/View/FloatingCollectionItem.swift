@@ -1,3 +1,10 @@
+//
+//  FloatingCollectionItem.swift
+//  Clipboard
+//
+//  浮动窗口集合项：包装 FloatingCardRowView，转发状态与回调。
+//
+
 import AppKit
 
 final class FloatingCollectionItem: NSCollectionViewItem {
@@ -14,12 +21,14 @@ final class FloatingCollectionItem: NSCollectionViewItem {
         view = cardView
     }
 
+    /// 绑定模型与状态
     func configure(
         with model: PasteboardModel,
         keyword: String,
         isFocused: Bool,
         quickPasteIndex: Int?,
-        displayMode: FloatingDisplayMode = .standard
+        displayMode: FloatingDisplayMode = .standard,
+        showsImagePreview: Bool = false
     ) {
         self.isFocused = isFocused
         cardView.configure(
@@ -28,21 +37,30 @@ final class FloatingCollectionItem: NSCollectionViewItem {
             isSelected: isSelected,
             isFocused: isFocused,
             quickPasteIndex: quickPasteIndex,
-            displayMode: displayMode
+            displayMode: displayMode,
+            showsImagePreview: showsImagePreview
         )
     }
 
+    /// 更新焦点态
     func setFocused(_ focused: Bool) {
         isFocused = focused
         cardView.updateSelection(isSelected: isSelected, isFocused: focused)
     }
 
+    /// 更新快捷粘贴序号
     func setQuickPasteIndex(_ index: Int?) {
         cardView.quickPasteIndex = index
     }
 
+    /// 更新纯文本粘贴提示
     func setShowPlainTextIndicator(_ show: Bool) {
         cardView.showPlainTextIndicator = show
+    }
+
+    /// 仅刷新搜索高亮
+    func updateKeyword(_ keyword: String) {
+        cardView.updateKeyword(keyword)
     }
 
     override var isSelected: Bool {

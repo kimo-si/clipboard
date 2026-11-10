@@ -65,13 +65,14 @@ enum DateFilterOption: String, CaseIterable, Equatable {
 
 // MARK: - SearchCriteria
 
-/// 搜索条件：关键词 + 顶栏分组（自定义 chip）+ 原始筛选条件
+/// 搜索条件：关键词 + 自动分类范围 + 自定义分组 + 用户筛选条件。
 struct SearchCriteria: Equatable {
     var keyword: String
     var selectedTypes: Set<PasteModelType>
     var selectedAppIDs: Set<Int64>
     var selectedDateFilter: DateFilterOption?
     var selectedGroupIds: Set<Int>
+    var categoryType: PasteModelType? = nil
 
     static let empty = SearchCriteria(
         keyword: "",
@@ -87,5 +88,6 @@ struct SearchCriteria: Equatable {
             && selectedAppIDs.isEmpty
             && selectedDateFilter == nil
             && selectedGroupIds.isEmpty
+            && categoryType == nil
     }
 }

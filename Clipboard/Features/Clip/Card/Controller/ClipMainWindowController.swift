@@ -92,8 +92,13 @@ extension ClipMainWindowController {
         }
     }
 
+    /// 重新呼出前清除临时搜索条件，并沿用原有抽屉显示动画。
     func show(in frame: NSRect?) {
         guard let window else { return }
+        if !targetVisible {
+            // 仅开始新一轮浏览时重置搜索，已打开窗口的再次聚焦保留输入。
+            (contentViewController as? ClipMainViewController)?.topVM.resetSearchForPresentation()
+        }
         targetVisible = true
         let initiallyHidden = !window.isVisible
 

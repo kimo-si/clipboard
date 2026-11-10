@@ -93,7 +93,9 @@ extension TopBarViewModel {
         tags.append(tag)
     }
 
+    /// 根据手动分组同步标签，空分组时保留当前自动分类。
     func syncSelectedChip(preferredGroupId: Int? = nil) {
+        guard !selectedGroupIds.isEmpty || chipStore.getSelectedChip()?.typeFilter == nil else { return }
         let preferredId = preferredGroupId.flatMap {
             selectedGroupIds.contains($0) ? $0 : nil
         }

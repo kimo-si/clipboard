@@ -158,7 +158,7 @@ extension ClipMainViewController {
         let accepted = dataStore.addNewItem(
             draggingInfo.draggingPasteboard,
             sourceApp: dragSourceApp,
-            chipId: store.selectedChipId
+            chipId: store.getSelectChipId()
         )
         dragSourceApp = nil
         dropOverlayView.resetDragState()

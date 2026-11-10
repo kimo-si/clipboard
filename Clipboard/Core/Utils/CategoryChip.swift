@@ -8,6 +8,9 @@
 import SwiftUI
 
 struct CategoryChip: Identifiable, Equatable, Codable {
+    static let allID = -1
+    static let imagesID = -3
+
     let id: Int
     var name: String
     var colorIndex: Int // 存储颜色在调色板中的索引
@@ -60,28 +63,24 @@ struct CategoryChip: Identifiable, Equatable, Codable {
         }
     }
 
-    var typeFilter: [String]? {
-        guard isSystem else { return nil }
+    /// 自动分类只限定内容类型，不作为记录的存储分组。
+    var typeFilter: PasteModelType? {
+        isSystem && id == Self.imagesID ? .image : nil
+    }
 
-        switch id {
-        case -1:
-            return nil
-        case -2:
-            return [
-                PasteboardType.string.rawValue,
-                PasteboardType.rtf.rawValue,
-                PasteboardType.rtfd.rawValue
-            ]
-        case -3:
-            return [
-                PasteboardType.png.rawValue,
-                PasteboardType.tiff.rawValue
-            ]
-        case -4:
-            return [PasteboardType.fileURL.rawValue]
-        default:
-            return nil
+    /// 自动聚合标签不接受手动归组，避免把系统标签 ID 写入记录。
+    var acceptsManualAssignment: Bool {
+        !isSystem || id == Self.allID
+    }
+
+    /// 系统标签在图标模式下仍可区分全部历史与图片。
+    var systemSymbolName: String? {
+        guard isSystem else { return nil }
+        if id == Self.imagesID { return "photo" }
+        if #available(macOS 15.0, *) {
+            return "clock.arrow.trianglehead.counterclockwise.rotate.90"
         }
+        return "clock.arrow.circlepath"
     }
 
     init(id: Int, name: String, color: Color, isSystem: Bool) {
@@ -106,9 +105,15 @@ struct CategoryChip: Identifiable, Equatable, Codable {
 
     static let systemChips: [CategoryChip] = [
         .init(
-            id: -1,
-            name: String(localized: .clipboard),
+            id: allID,
+            name: String(localized: .allItems),
             color: .gray,
+            isSystem: true
+        ),
+        .init(
+            id: imagesID,
+            name: String(localized: .image),
+            color: .blue,
             isSystem: true
         )
     ]

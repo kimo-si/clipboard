@@ -1,93 +1,61 @@
+//
+//  FloatingHeaderView+Chips.swift
+//  Clipboard
+//
+//  浮动窗口分类 Tab 的重载、重命名与删除逻辑。
+//
+
 import AppKit
-import Combine
 import SnapKit
 
 extension FloatingHeaderView {
-    private var chipSize: ChipButton.Size {
-        displayMode == .minimal ? .mini : .small
-    }
+    // MARK: - Reload
 
+    /// 依据 ViewModel 重建分类 Tab
     func reloadChips() {
         guard let topVM else { return }
-        let chips = topVM.chips()
-        let selectedId = topVM.getSelectChipId()
-
-        chipScrollView.reload(
-            chips: chips,
-            selectedId: selectedId,
-            dotMode: false,
-            size: chipSize,
-            creatingChip: topVM.editingNewChip,
-            makeConfig: { [weak self] chip, isSelected, dotMode in
-                Self.chipConfig(chip, selected: isSelected, dotMode: dotMode, topVM: topVM, owner: self)
-            }
+        tabBarView.reload(
+            chips: topVM.chips(),
+            selectedId: topVM.getSelectChipId()
         )
-        chipScrollView.onSelectionChanged = { [weak self] id in
-            self?.topVM?.setSelectChipId(chip: id)
-            self?.chipScrollView.scrollToChip(id: id)
-            self?.onChipSelected?()
-        }
+    }
 
+    /// 仅同步 Tab 选中态
+    func updateChipSelection() {
+        guard let topVM else { return }
+        tabBarView.updateSelection(topVM.getSelectChipId())
+    }
+
+    /// 提交键盘编辑（Enter）
+    func commitKeyboardEditing() {
+        guard let topVM else { return }
         if topVM.editingNewChip {
-            appendNewChipPlaceholder()
+            commitNewChip()
+        } else if topVM.editingChipId != nil {
+            topVM.commitEditingChip()
+            reloadChips()
         }
     }
 
-    private static func chipConfig(
-        _ chip: CategoryChip, selected isSelected: Bool, dotMode: Bool,
-        topVM: TopBarViewModel, owner: FloatingHeaderView?
-    ) -> ChipButton.Config {
-        let isEditing = topVM.editingChipId == chip.id
-        return .init(
-            chip: chip,
-            isSelected: isSelected,
-            dotMode: dotMode,
-            size: owner?.chipSize ?? .small,
-            isEditing: isEditing,
-            editingName: isEditing ? topVM.editingChipName : chip.name,
-            editingColorIndex: isEditing ? topVM.editingChipColorIndex : chip.colorIndex,
-            action: { [weak owner] in
-                owner?.chipScrollView.selectedChipId = chip.id
-                owner?.chipScrollView.onSelectionChanged?(chip.id)
-            },
-            onEdit: { [weak owner] in
-                topVM.startEditingChip(chip)
-                owner?.reloadChips()
-            },
-            onDelete: { [weak owner] in
-                owner?.confirmDeleteChip(chip)
-            },
-            onColorChange: { [weak owner] colorIndex in
-                topVM.updateChip(chip, colorIndex: colorIndex)
-                owner?.reloadChips()
-            },
-            onEditingNameChange: { text in
-                topVM.editingChipName = text
-            },
-            onEditingSubmit: { [weak owner] in
-                topVM.commitEditingChip()
-                owner?.reloadChips()
-            },
-            onEditingCancel: { [weak owner] in
-                topVM.cancelEditingChip()
-                owner?.reloadChips()
-            },
-            onEditingFocusChange: { [weak owner] focused in
-                owner?.onChipEditingFocusChange?(focused)
-            },
-            onDrop: { [weak owner] model in
-                owner?.topVM?.assignModelToChip(model: model, chipId: chip.id) ?? false
-            }
-        )
-
+    /// 取消键盘编辑（Esc）
+    func cancelKeyboardEditing() {
+        guard let topVM else { return }
+        if topVM.editingNewChip {
+            cancelNewChip()
+        } else if topVM.editingChipId != nil {
+            topVM.cancelEditingChip()
+            reloadChips()
+        }
     }
 
-    // MARK: - New Chip Creation
+    // MARK: - Create
 
+    /// 新建分类（无预置内容）
     func startCreatingChip() {
         startCreatingChip(pinModel: nil)
     }
 
+    /// 新建分类，并可把某条内容直接归入新分类
     func startCreatingChip(pinModel: PasteboardModel?) {
         guard let topVM else { return }
         if topVM.editingNewChip {
@@ -99,58 +67,21 @@ extension FloatingHeaderView {
         topVM.editingNewChip = true
         topVM.newChipName = String(localized: .untitled)
         topVM.pendingPinModel = pinModel
-        reloadChips()
+        presentInlineRename(name: topVM.newChipName, isNew: true)
     }
 
-    func appendNewChipPlaceholder() {
-        guard let topVM else { return }
-        let placeholder = CategoryChip(
-            id: Int.min,
-            name: topVM.newChipName,
-            colorIndex: topVM.newChipColorIndex,
-            isSystem: false
-        )
-        let config = ChipButton.Config(
-            chip: placeholder,
-            isSelected: true,
-            dotMode: false,
-            size: chipSize,
-            isEditing: true,
-            editingName: topVM.newChipName,
-            editingColorIndex: topVM.newChipColorIndex,
-            action: {},
-            onColorChange: { [weak self] colorIndex in
-                self?.topVM?.newChipColorIndex = colorIndex
-                self?.refreshNewChipPlaceholder()
-            },
-            onEditingNameChange: { [weak self] text in
-                self?.topVM?.newChipName = text
-            },
-            onEditingSubmit: { [weak self] in self?.commitNewChip() },
-            onEditingCancel: { [weak self] in self?.cancelNewChip() },
-            onEditingFocusChange: { [weak self] focused in
-                self?.onChipEditingFocusChange?(focused)
-            }
-        )
-        chipScrollView.appendNewChipButton(config: config)
-        chipScrollView.scrollToEnd()
-    }
-
-    func refreshNewChipPlaceholder() {
-        guard let topVM, topVM.editingNewChip else { return }
-        chipScrollView.removeNewChipButton()
-        appendNewChipPlaceholder()
-    }
-
+    /// 提交新建分类
     func commitNewChip() {
         endNewChip(commit: true)
     }
 
+    /// 取消新建分类
     func cancelNewChip() {
         endNewChip(commit: false)
     }
 
-    func endNewChip(commit: Bool) {
+    /// 结束新建流程
+    private func endNewChip(commit: Bool) {
         guard let topVM, topVM.editingNewChip else { return }
         topVM.editingNewChip = false
         topVM.commitNewChipOrCancel(commitIfNonEmpty: commit)
@@ -160,6 +91,48 @@ extension FloatingHeaderView {
         }
     }
 
+    // MARK: - Rename
+
+    /// 进入分类重命名
+    func handleRenameChip(_ chip: CategoryChip) {
+        guard let topVM, !chip.isSystem else { return }
+        topVM.startEditingChip(chip)
+        presentInlineRename(name: chip.name, isNew: false)
+    }
+
+    /// 弹出内联重命名输入框
+    private func presentInlineRename(name: String, isNew: Bool) {
+        // 弹窗需由视图持有，否则 sheet 会随局部变量释放而失效
+        renameAlert = FloatingChipRenameAlert(
+            initialName: name,
+            title: String(localized: isNew ? .untitled : .rename)
+        ) { [weak self] newName in
+            guard let self, let topVM else { return }
+            renameAlert = nil
+            if isNew {
+                topVM.newChipName = newName
+                commitNewChip()
+            } else {
+                topVM.editingChipName = newName
+                topVM.commitEditingChip()
+                reloadChips()
+            }
+        } onCancel: { [weak self] in
+            guard let self else { return }
+            renameAlert = nil
+            if isNew {
+                cancelNewChip()
+            } else {
+                topVM?.cancelEditingChip()
+                reloadChips()
+            }
+        }
+        renameAlert?.present(over: window)
+    }
+
+    // MARK: - Delete
+
+    /// 删除分类（有内容时二次确认）
     func confirmDeleteChip(_ chip: CategoryChip) {
         guard !chip.isSystem else { return }
         Task { @MainActor [weak self] in
@@ -170,7 +143,6 @@ extension FloatingHeaderView {
                 reloadChips()
                 return
             }
-
             guard NSAlert.runConfirm(
                 title: String(localized: .deleteChipTitle(chip.name)),
                 message: String(localized: .deleteChipMessage(chip.name))
@@ -179,5 +151,4 @@ extension FloatingHeaderView {
             reloadChips()
         }
     }
-
 }

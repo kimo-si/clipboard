@@ -114,12 +114,15 @@ extension ClipFloatingViewController {
         else { return event }
 
         let historyView = floatingContentView.historyView
-        let count = historyView.collectionView.numberOfItems(inSection: 0)
+        // 列表按时间分组后，导航必须使用全局索引而非单个 section 的 item 下标
+        let count = historyView.dataList.count
         guard count > 0 else { return nil }
 
         let movesDown = event.keyCode == KeyCode.downArrow
-        let selected = historyView.collectionView.selectionIndexPaths
-        let anchor = (movesDown ? selected.max() : selected.min())?.item ?? historyView.selectedIndex
+        let selectedGlobals = historyView.collectionView.selectionIndexPaths
+            .compactMap { historyView.globalIndex(for: $0) }
+        let anchor = (movesDown ? selectedGlobals.max() : selectedGlobals.min())
+            ?? historyView.selectedIndex
         let next = min(max(anchor + (movesDown ? 1 : -1), 0), count - 1)
         if next == anchor {
             NSSound.beep()

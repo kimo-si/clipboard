@@ -141,12 +141,12 @@ final class TopBarViewModel {
         refreshGroupTags()
     }
 
+    /// 同步自定义分组并通知查询；系统标签之间切换也需要重新筛选。
     func syncGroupIdsFromChipStore() {
         let groupId = chipStore.getSelectChipId()
         let newGroupIds: Set<Int> = groupId == -1 ? [] : [groupId]
-        guard selectedGroupIds != newGroupIds else { return }
-
         selectedGroupIds = newGroupIds
+        // 刷新分组标签并广播筛选变化，让自动分类立即生效。
         refreshGroupTags()
     }
 

@@ -20,7 +20,7 @@ extension ChipButton {
 
         if config.dotMode {
             if config.chip.isSystem {
-                addSystemClockIcon(pointSize: config.size.smallIconPt, weight: .medium)
+                addSystemIcon(pointSize: config.size.smallIconPt, weight: .medium)
             } else {
                 configureDot(colorIndex: config.chip.colorIndex)
                 stack.addArrangedSubview(dotContainerView)
@@ -30,8 +30,8 @@ extension ChipButton {
         }
 
         if !config.size.isCompact {
-            if config.chip.id == -1 {
-                addSystemClockIcon(pointSize: config.size.iconContainerSize, weight: .regular)
+            if config.chip.isSystem {
+                addSystemIcon(pointSize: config.size.iconContainerSize, weight: .regular)
             } else {
                 let colorIndex =
                     config.isEditing
@@ -63,12 +63,9 @@ extension ChipButton {
         invalidateIntrinsicContentSize()
     }
 
-    func addSystemClockIcon(pointSize: CGFloat, weight: NSFont.Weight) {
-        let symbolName = if #available(macOS 15.0, *) {
-            "clock.arrow.trianglehead.counterclockwise.rotate.90"
-        } else {
-            "clock.arrow.circlepath"
-        }
+    /// 按系统分类显示历史或图片图标，兼容标签折叠后的图标模式。
+    func addSystemIcon(pointSize: CGFloat, weight: NSFont.Weight) {
+        guard let symbolName = config.chip.systemSymbolName else { return }
         let icon = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
         iconImageView.image = icon?.withSymbolConfiguration(.init(pointSize: pointSize, weight: weight))
         iconImageView.snp.remakeConstraints { make in

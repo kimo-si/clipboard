@@ -18,6 +18,11 @@ final class ClipFloatingViewController: NSViewController {
     // MARK: - Preview
 
     var previewPopover: ClipPreviewPopover?
+    lazy var imageHoverPreview = ImageHoverPreviewController(
+        collectionView: floatingContentView.historyView.collectionView,
+        modelAt: { [weak self] in self?.floatingContentView.historyView.dataSource.itemIdentifier(for: $0) },
+        showPreview: { [weak self] in self?.showImageHoverPreview(at: $0) }
+    )
 
     // MARK: - Focus
 
@@ -52,10 +57,6 @@ final class ClipFloatingViewController: NSViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.clear.cgColor
-
-        floatingContentView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(floatingContentView)
         floatingContentView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
@@ -66,7 +67,10 @@ final class ClipFloatingViewController: NSViewController {
         }
 
         floatingContentView.historyView.setPreviewHooks(
-            isShown: { [weak self] in self?.previewPopover?.isShown == true },
+            isShown: { [weak self] in
+                guard let self else { return false }
+                return previewPopover?.isShown == true && !imageHoverPreview.isShowingPreview
+            },
             close: { [weak self] in self?.closePreview() },
             reopen: { [weak self] in
                 guard let self else { return }
@@ -77,6 +81,9 @@ final class ClipFloatingViewController: NSViewController {
                 }
             }
         )
+        floatingContentView.historyView.onResetHoverPreview = { [weak self] in
+            self?.imageHoverPreview.reset()
+        }
 
         floatingContentView.headerView.onChipSelected = { [weak self] in
             self?.focusCollection()
@@ -106,6 +113,8 @@ final class ClipFloatingViewController: NSViewController {
 
     override func viewDidAppear() {
         super.viewDidAppear()
+        // 浮窗与横向卡片共用图片悬停逻辑。
+        imageHoverPreview.start()
         if monitorToken == nil {
             monitorToken = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: keyDownEvent(_:))
         }
@@ -118,6 +127,8 @@ final class ClipFloatingViewController: NSViewController {
 
     override func viewDidDisappear() {
         super.viewDidDisappear()
+        // 隐藏时取消等待与悬停预览，防止窗口外继续弹出。
+        imageHoverPreview.stop()
         if let token = monitorToken {
             NSEvent.removeMonitor(token)
             monitorToken = nil

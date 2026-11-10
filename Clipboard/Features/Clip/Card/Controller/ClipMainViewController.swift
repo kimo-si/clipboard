@@ -41,6 +41,11 @@ final class ClipMainViewController: NSViewController {
     // MARK: - Preview
 
     var previewPopover: ClipPreviewPopover?
+    lazy var imageHoverPreview = ImageHoverPreviewController(
+        collectionView: collectionView,
+        modelAt: { [weak self] in self?.displayedModel(at: $0) },
+        showPreview: { [weak self] in self?.showImageHoverPreview(at: $0) }
+    )
 
     // MARK: - Quick Paste
 
@@ -220,6 +225,8 @@ extension ClipMainViewController {
 
     override func viewDidAppear() {
         super.viewDidAppear()
+        // 开始图片悬停预览，沿用空格键的预览内容与尺寸。
+        imageHoverPreview.start()
 
         if topBarView.isSearching, !topVM.hasInput {
             topBarView.deactivateSearch()
@@ -260,6 +267,8 @@ extension ClipMainViewController {
 
     override func viewDidDisappear() {
         super.viewDidDisappear()
+        // 隐藏窗口时取消延迟任务并收起悬停预览。
+        imageHoverPreview.stop()
         PasteDataStore.main.clearExpiredData()
         if let token = monitorToken {
             NSEvent.removeMonitor(token)

@@ -127,9 +127,9 @@ enum Const {
 }
 
 enum FloatConst {
-    static let floatWindowWidth: CGFloat = 320.0
-    static let floatWindowHeight: CGFloat = 650.0
-    static let cardSize: CGFloat = 300.0
+    static let floatWindowWidth: CGFloat = 400.0
+    static let floatWindowHeight: CGFloat = 812.0
+    static let cardSize: CGFloat = 372.0
     static let headerHeight: CGFloat = 90.0
     static let footerHeight: CGFloat = 32.0
     static let cardHeight: CGFloat = 60.0

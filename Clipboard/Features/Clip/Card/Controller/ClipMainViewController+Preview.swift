@@ -9,6 +9,16 @@ import AppKit
 import Combine
 
 extension ClipMainViewController {
+    /// 只为图片打开悬停预览，不替换用户已手动打开的内容。
+    func showImageHoverPreview(at indexPath: IndexPath) -> ClipPreviewPopover? {
+        guard previewPopover == nil,
+              let model = displayedModel(at: indexPath), model.type == .image,
+              let anchor = collectionView.item(at: indexPath)?.view else { return nil }
+        // 复用空格预览入口，保持内容、大小及操作完全一致。
+        showPreviewPopover(for: model, relativeTo: anchor)
+        return previewPopover
+    }
+
     func showPreviewPopover(
         for model: PasteboardModel,
         relativeTo view: NSView

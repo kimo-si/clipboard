@@ -8,6 +8,18 @@
 import AppKit
 
 extension ClipFloatingViewController {
+    /// 将当前可见图片映射到实时索引，复用空格预览且保留手动预览。
+    func showImageHoverPreview(at indexPath: IndexPath) -> ClipPreviewPopover? {
+        let historyView = floatingContentView.historyView
+        guard previewPopover == nil,
+              let model = historyView.dataSource.itemIdentifier(for: indexPath), model.type == .image,
+              let index = historyView.dataList.firstIndex(where: { $0.uniqueId == model.uniqueId }),
+              historyView.collectionView.item(at: indexPath) != nil else { return nil }
+        // 打开悬停图片时不改变选中项，键盘粘贴目标保持不变。
+        openPreview(at: index)
+        return previewPopover
+    }
+
     func togglePreview(at index: Int) {
         if previewPopover != nil {
             closePreview()
@@ -18,7 +30,7 @@ extension ClipFloatingViewController {
 
     func openPreview(at index: Int) {
         let historyView = floatingContentView.historyView
-        guard index < historyView.dataList.count else { return }
+        guard historyView.dataList.indices.contains(index) else { return }
         let model = historyView.dataList[index]
         let anchorView = historyView.anchorViewForItem(at: index)
 

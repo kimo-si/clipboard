@@ -23,6 +23,8 @@ extension ClipMainViewController {
     }
 
     func applySnapshot(items: [PasteboardModel]? = nil, animating: Bool = true, completion: (() -> Void)? = nil) {
+        // 数据替换前撤销悬停目标，避免旧索引指向其他内容。
+        imageHoverPreview.reset()
         var snapshot = NSDiffableDataSourceSnapshot<ClipSection, PasteboardModel>()
         snapshot.appendSections([.main])
         snapshot.appendItems(items ?? dataList.value)
@@ -138,7 +140,10 @@ extension ClipMainViewController {
             }
         }
 
-        presenter.previewIsShown = { [weak self] in self?.previewPopover?.isShown == true }
+        presenter.previewIsShown = { [weak self] in
+            guard let self else { return false }
+            return previewPopover?.isShown == true && !imageHoverPreview.isShowingPreview
+        }
         presenter.closePreview = { [weak self] in self?.closePreviewPopover() }
         presenter.reopenPreview = { [weak self] in self?.updatePreviewForSelectedItem() }
 

@@ -2,254 +2,196 @@
 //  FloatingCardRowView+Content.swift
 //  Clipboard
 //
+//  浮动窗口列表行的内容渲染：多行文本 + 搜索高亮。
+//
 
 import AppKit
 import SnapKit
 
 extension FloatingCardRowView {
-    func makeContentSubview(for model: PasteboardModel, keyword: String) -> NSView {
+    // MARK: - 文本渲染
+
+    /// 渲染带搜索高亮的多行内容
+    /// - Parameters:
+    ///   - text: 已由模型生成的展示文本
+    ///   - keyword: 搜索关键字，为空时不做高亮
+    ///   - font: 内容字体
+    ///   - color: 内容颜色
+    ///   - lineHeight: 行高，多行排版用
+    ///   - lineBreakMode: 正文自动换行，链接标题与地址各自单行截断
+    /// - Returns: 可直接赋给 NSTextField 的富文本
+    func makeHighlightedContent(
+        text: String,
+        keyword: String,
+        font: NSFont,
+        color: NSColor,
+        lineHeight: CGFloat,
+        lineBreakMode: NSLineBreakMode = .byWordWrapping
+    ) -> NSAttributedString {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = lineBreakMode
+        paragraph.minimumLineHeight = lineHeight
+        paragraph.maximumLineHeight = lineHeight
+
+        let attributed = NSMutableAttributedString(string: text)
+        let fullRange = NSRange(location: 0, length: attributed.length)
+        attributed.addAttributes(
+            [
+                .font: font,
+                .foregroundColor: color,
+                .paragraphStyle: paragraph,
+            ],
+            range: fullRange
+        )
+
+        let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return attributed }
+        applyKeywordHighlight(to: attributed, keyword: trimmed)
+        return attributed
+    }
+
+    /// 富文本或颜色条目需要整卡换底时返回该颜色
+    func cardFill(for model: PasteboardModel) -> NSColor? {
         switch model.type {
         case .color:
-            return FloatingColorContentView(model: model)
-        case .image:
-            return FloatingImageContentView(model: model, displayMode: displayMode)
-        case .file:
-            return FloatingFileContentView(model: model)
+            return model.cachedBackgroundColor
         case .rich:
-            if model.hasBgColor {
-                return FloatingRichContentView(
-                    model: model, keyword: keyword, maximumLines: displayMode == .standard ? 2 : 1
-                )
-            }
-            return FloatingTextContentView(
-                model: model, keyword: keyword, maximumLines: displayMode == .standard ? 0 : 1
-            )
+            return model.richBackground(on: FloatingTheme.rowBackground())
+        default:
+            return nil
+        }
+    }
+
+    /// 按类型生成列表正文：普通文本最多三行，链接为标题 + 地址，富文本保留原色
+    func makeContent(
+        for model: PasteboardModel,
+        keyword: String,
+        cardFill: NSColor?,
+        linkTitle: String?
+    ) -> NSAttributedString {
+        switch model.type {
         case .link:
-            if PasteUserDefaults.enableLinkPreview {
-                return FloatingLinkContentView(model: model, keyword: keyword, displayMode: displayMode)
-            }
-            return FloatingTextContentView(
-                model: model, keyword: keyword, maximumLines: displayMode == .standard ? 0 : 1
+            return makeLinkContent(model: model, keyword: keyword, title: linkTitle)
+        case .rich:
+            return makeRichContent(model: model, keyword: keyword, preserveColors: cardFill != nil)
+        case .color:
+            let background = model.cachedBackgroundColor ?? .controlBackgroundColor
+            return makeHighlightedContent(
+                text: model.colorDisplayText,
+                keyword: keyword,
+                font: displayMode.contentFont,
+                color: contrastingNSColor(for: background),
+                lineHeight: displayMode.contentLineHeight
             )
-        case .string:
-            return FloatingTextContentView(
-                model: model, keyword: keyword, maximumLines: displayMode == .standard ? 0 : 1
+        default:
+            return makeHighlightedContent(
+                text: model.titleText(),
+                keyword: keyword,
+                font: displayMode.contentFont,
+                color: .labelColor,
+                lineHeight: displayMode.contentLineHeight
             )
-        case .none:
-            return NSView()
         }
     }
-}
 
-// MARK: - FloatingTextContentView
-
-final class FloatingTextContentView: NSView {
-    private let textField = NSTextField(labelWithString: "")
-
-    init(model: PasteboardModel, keyword: String, maximumLines: Int) {
-        super.init(frame: .zero)
-        textField.cell = VerticallyCenteredTextFieldCell()
-        textField.cell?.usesSingleLineMode = maximumLines == 1
-        textField.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-        textField.lineBreakMode = .byTruncatingTail
-        textField.maximumNumberOfLines = maximumLines
-        textField.cell?.truncatesLastVisibleLine = true
-        addSubview(textField)
-        textField.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
-        }
-        update(keyword: keyword, model: model)
+    /// 链接两行展示标题与地址，并统一叠加搜索高亮
+    private func makeLinkContent(
+        model: PasteboardModel,
+        keyword: String,
+        title: String?
+    ) -> NSAttributedString {
+        let address = model.attributeString.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let headline = (trimmedTitle?.isEmpty == false ? trimmedTitle : nil) ?? linkHost(from: address)
+        let result = NSMutableAttributedString(attributedString: makeHighlightedContent(
+            text: headline, keyword: keyword, font: displayMode == .standard ? FloatingTheme.linkTitleFont : displayMode.contentFont,
+            color: .labelColor, lineHeight: displayMode.contentLineHeight,
+            lineBreakMode: .byTruncatingTail
+        ))
+        guard headline != address else { return result }
+        result.append(makeHighlightedContent(
+            text: "\n\(address)", keyword: keyword, font: FloatingTheme.linkAddressFont,
+            color: .secondaryLabelColor, lineHeight: displayMode.contentLineHeight,
+            lineBreakMode: .byTruncatingTail
+        ))
+        return result
     }
 
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError()
-    }
-
-    func update(keyword: String, model: PasteboardModel) {
-        let text = keyword.isEmpty
-            ? model.plainTextAttributedString
-            : model.highlightedNSAttributedString(keyword: keyword)
-        if textField.maximumNumberOfLines == 1, model.pasteboardType == .string {
-            let preview = NSMutableAttributedString(attributedString: text)
-            preview.addAttribute(
-                .font, value: NSFont.systemFont(ofSize: 12), range: NSRange(location: 0, length: preview.length)
+    /// 富文本保留前景色；和默认卡片对比不够时由整卡底色负责可读性
+    private func makeRichContent(
+        model: PasteboardModel,
+        keyword: String,
+        preserveColors: Bool
+    ) -> NSAttributedString {
+        let source = model.attributeString
+        guard source.length > 0 else {
+            return makeHighlightedContent(
+                text: model.titleText(),
+                keyword: keyword,
+                font: displayMode.contentFont,
+                color: .labelColor,
+                lineHeight: displayMode.contentLineHeight
             )
-            textField.attributedStringValue = preview
-        } else {
-            textField.attributedStringValue = text
         }
-    }
-}
 
-// MARK: - FloatingRichContentView
-
-final class FloatingRichContentView: NSView {
-    private let textField = NSTextField(labelWithString: "")
-
-    init(model: PasteboardModel, keyword: String, maximumLines: Int) {
-        super.init(frame: .zero)
-        textField.cell = VerticallyCenteredTextFieldCell()
-        textField.cell?.usesSingleLineMode = maximumLines == 1
-        textField.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-        textField.lineBreakMode = .byTruncatingTail
-        textField.maximumNumberOfLines = maximumLines
-        textField.cell?.truncatesLastVisibleLine = true
-        addSubview(textField)
-        textField.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+        let mutable = NSMutableAttributedString(attributedString: source)
+        let full = NSRange(location: 0, length: mutable.length)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byWordWrapping
+        paragraph.minimumLineHeight = displayMode.contentLineHeight
+        paragraph.maximumLineHeight = displayMode.contentLineHeight
+        mutable.addAttribute(.paragraphStyle, value: paragraph, range: full)
+        // 保留代码片段的等宽字体与原有字重，只统一展示字号。
+        applyRichFonts(from: source, to: mutable)
+        if !preserveColors {
+            mutable.addAttribute(.foregroundColor, value: NSColor.labelColor, range: full)
         }
-        update(keyword: keyword, model: model)
+
+        let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            applyKeywordHighlight(to: mutable, keyword: trimmed)
+        }
+        return mutable
     }
 
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError()
-    }
-
-    func update(keyword: String, model: PasteboardModel) {
-        textField.attributedStringValue = model.highlightedRichText(keyword: keyword)
-    }
-}
-
-// MARK: - FloatingColorContentView
-
-private final class FloatingColorContentView: NSView {
-    private let label = NSTextField(labelWithString: "")
-
-    init(model: PasteboardModel) {
-        super.init(frame: .zero)
-        label.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .medium)
-        label.alignment = .center
-        label.lineBreakMode = .byTruncatingTail
-        label.textColor = model.colors().1
-        label.stringValue = model.colorDisplayText
-        addSubview(label)
-        label.snp.makeConstraints { make in
-            make.center.equalToSuperview()
-            make.leading.greaterThanOrEqualToSuperview()
-            make.trailing.lessThanOrEqualToSuperview()
+    /// 保留富文本字体特征，避免代码片段丢失等宽排版
+    private func applyRichFonts(from source: NSAttributedString, to result: NSMutableAttributedString) {
+        let fullRange = NSRange(location: 0, length: source.length)
+        source.enumerateAttribute(.font, in: fullRange) { value, range, _ in
+            let font = (value as? NSFont).map {
+                NSFontManager.shared.convert($0, toSize: displayMode.contentFont.pointSize)
+            } ?? displayMode.contentFont
+            result.addAttribute(.font, value: font, range: range)
         }
     }
 
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError()
-    }
-}
-
-// MARK: - FloatingImageContentView
-
-private final class FloatingImageContentView: NSView {
-    private let imageView = NSView()
-    private let placeholder = NSImageView()
-    private var loadTask: Task<Void, Never>?
-
-    init(model: PasteboardModel, displayMode: FloatingDisplayMode) {
-        super.init(frame: .zero)
-        imageView.wantsLayer = true
-        imageView.layer?.cornerRadius = displayMode == .standard ? 0 : 4
-        imageView.layer?.masksToBounds = true
-        imageView.layer?.contentsGravity = displayMode == .standard ? .resizeAspect : .resizeAspectFill
-        imageView.isHidden = true
-        addSubview(imageView)
-        imageView.snp.makeConstraints { make in
-            if displayMode == .standard {
-                make.edges.equalToSuperview()
-            } else {
-                make.centerY.equalToSuperview()
-                make.width.equalTo(64)
-                make.height.equalToSuperview()
-            }
+    /// 用域名作为链接标题的占位
+    private func linkHost(from urlString: String) -> String {
+        guard let host = urlString.asCompleteURL()?.host() else { return urlString }
+        if host.hasPrefix("www.") {
+            return String(host.dropFirst(4))
         }
+        return host
+    }
 
-        if displayMode == .minimal {
-            let photoIcon = NSImageView()
-            photoIcon.image = NSImage(
-                systemSymbolName: "photo", accessibilityDescription: String(localized: .image)
+    /// 在富文本中标记所有匹配到的关键字
+    private func applyKeywordHighlight(to attributed: NSMutableAttributedString, keyword: String) {
+        let source = attributed.string as NSString
+        let options: NSString.CompareOptions = [.caseInsensitive, .diacriticInsensitive, .widthInsensitive]
+        var searchRange = NSRange(location: 0, length: source.length)
+
+        // 逐段查找并叠加高亮背景，直到文本末尾
+        while searchRange.length > 0 {
+            let found = source.range(of: keyword, options: options, range: searchRange)
+            guard found.location != NSNotFound else { break }
+            attributed.addAttribute(
+                .backgroundColor,
+                value: NSColor.systemYellow.withAlphaComponent(0.65),
+                range: found
             )
-            photoIcon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
-            photoIcon.contentTintColor = .systemBlue
-            photoIcon.imageScaling = .scaleNone
-            addSubview(photoIcon)
-            photoIcon.snp.makeConstraints { make in
-                make.leading.equalToSuperview()
-                make.centerY.equalToSuperview()
-                make.width.height.equalTo(20)
-            }
-            imageView.snp.makeConstraints { $0.leading.equalTo(photoIcon.snp.trailing).offset(Const.space8) }
+            let next = found.location + found.length
+            guard next < source.length else { break }
+            searchRange = NSRange(location: next, length: source.length - next)
         }
-
-        placeholder.image = NSImage(systemSymbolName: "photo", accessibilityDescription: nil)
-        placeholder.contentTintColor = .secondaryLabelColor
-        placeholder.imageScaling = .scaleProportionallyUpOrDown
-        addSubview(placeholder)
-        placeholder.snp.makeConstraints { make in
-            make.center.equalTo(imageView)
-            make.width.height.equalTo(20)
-        }
-
-        loadTask = Task { @MainActor [weak self] in
-            let image = await model.loadThumbnail()
-            guard !Task.isCancelled, let self else { return }
-            if let image {
-                imageView.layer?.contents = image
-                imageView.isHidden = false
-                placeholder.isHidden = true
-            }
-        }
-    }
-
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError()
-    }
-
-    deinit { loadTask?.cancel() }
-}
-
-// MARK: - FloatingFileContentView
-
-private final class FloatingFileContentView: NSView {
-    private let iconView = NSImageView()
-    private let nameLabel = NSTextField(labelWithString: "")
-
-    init(model: PasteboardModel) {
-        super.init(frame: .zero)
-
-        iconView.imageScaling = .scaleProportionallyUpOrDown
-        addSubview(iconView)
-        iconView.snp.makeConstraints { make in
-            make.leading.equalToSuperview()
-            make.centerY.equalToSuperview()
-            make.width.height.equalTo(24)
-        }
-
-        nameLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
-        nameLabel.lineBreakMode = .byTruncatingMiddle
-        nameLabel.maximumNumberOfLines = 1
-        addSubview(nameLabel)
-        nameLabel.snp.makeConstraints { make in
-            make.leading.equalTo(iconView.snp.trailing).offset(Const.space6)
-            make.trailing.equalToSuperview()
-            make.centerY.equalToSuperview()
-        }
-
-        if let paths = model.cachedFilePaths, !paths.isEmpty {
-            if paths.count > 1 {
-                iconView.image = NSImage(systemSymbolName: "folder.fill", accessibilityDescription: nil)
-                iconView.contentTintColor = NSColor.controlAccentColor.withAlphaComponent(0.7)
-                nameLabel.stringValue = String(localized: .fileCount(paths.count))
-            } else if let path = paths.first {
-                let url = URL(filePath: path)
-                iconView.image = FileThumbnailService.shared.systemIcon(for: url)
-                nameLabel.stringValue = url.lastPathComponent
-            }
-        }
-    }
-
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError()
     }
 }

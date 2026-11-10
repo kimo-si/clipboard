@@ -165,7 +165,7 @@ final class ChipButton: NSView, NSTextFieldDelegate {
     // MARK: - Drag & Drop
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        guard !config.isEditing else {
+        guard !config.isEditing, config.chip.acceptsManualAssignment else {
             return []
         }
 
@@ -182,7 +182,7 @@ final class ChipButton: NSView, NSTextFieldDelegate {
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        guard !config.isEditing else {
+        guard !config.isEditing, config.chip.acceptsManualAssignment else {
             return []
         }
 
@@ -203,7 +203,7 @@ final class ChipButton: NSView, NSTextFieldDelegate {
         isDraggingOver = false
         updateAppearance(animated: true)
 
-        guard !config.isEditing else {
+        guard !config.isEditing, config.chip.acceptsManualAssignment else {
             return false
         }
 

@@ -54,14 +54,17 @@ final class ClipFloatingWindowController: NSWindowController {
         win.configureCommonSettings()
 
         win.hasShadow = true
+        win.contentMinSize = clipVC.floatingContentView.displayMode == .standard
+            ? FloatingTheme.minimumWindowSize : FloatingTheme.compactWindowSize
         win.collectionBehavior = [
             .canJoinAllSpaces, .fullScreenAuxiliary, .stationary
         ]
 
         win.contentView?.wantsLayer = true
-        win.contentView?.layer?.cornerRadius = clipVC.floatingContentView.displayMode.windowRadius
-        win.contentView?.layer?.cornerCurve = .continuous
-        win.contentView?.layer?.masksToBounds = true
+        win.contentView?.layer?.backgroundColor = NSColor.clear.cgColor
+        clipVC.floatingContentView.applyWindowCornerRadius(
+            clipVC.floatingContentView.displayMode.windowRadius
+        )
 
         win.delegate = self
     }
@@ -206,7 +209,7 @@ final class ClipFloatingWindowController: NSWindowController {
 
         let size = win.frame.size
 
-        let finalSize: NSSize =
+        var finalSize: NSSize =
             if size.width < 100 || size.height < 100 {
                 NSSize(
                     width: FloatConst.floatWindowWidth,
@@ -216,6 +219,10 @@ final class ClipFloatingWindowController: NSWindowController {
                 size
             }
 
+        if let screen = win.screen ?? NSScreen.main {
+            finalSize.width = min(finalSize.width, screen.visibleFrame.width)
+            finalSize.height = min(finalSize.height, screen.visibleFrame.height)
+        }
         let origin = calculateWindowPosition(windowSize: finalSize)
         win.setFrame(NSRect(origin: origin, size: finalSize), display: true)
     }
@@ -228,6 +235,7 @@ final class ClipFloatingWindowController: NSWindowController {
         }
     }
 
+    /// 重新呼出时恢复当前标签的完整列表，再显示浮窗。
     func show(_ completionHandler: (@MainActor @Sendable () -> Void)? = nil) {
         guard let win = window else { return }
         guard !win.isVisible else {
@@ -236,6 +244,8 @@ final class ClipFloatingWindowController: NSWindowController {
             return
         }
 
+        // 已显示窗口的聚焦不重置；从隐藏状态呼出才清除上次搜索。
+        clipVC.floatingContentView.topVM.resetSearchForPresentation()
         clipVC.env.previousApp = NSWorkspace.shared.frontmostApplication
         positionWindow()
         win.alphaValue = 0

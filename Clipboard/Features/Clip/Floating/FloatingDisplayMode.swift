@@ -1,5 +1,6 @@
 import AppKit
 
+/// 浮动窗口显示模式
 enum FloatingDisplayMode: Int, CaseIterable {
     case standard
     case minimal
@@ -11,20 +12,40 @@ enum FloatingDisplayMode: Int, CaseIterable {
         }
     }
 
+    /// 窗口尺寸
     var windowSize: NSSize {
-        NSSize(width: self == .standard ? FloatConst.floatWindowWidth : 300, height: self == .standard ? 650 : 560)
+        self == .standard
+            ? NSSize(width: FloatConst.floatWindowWidth, height: FloatConst.floatWindowHeight)
+            : FloatingTheme.compactWindowSize
     }
 
-    var headerHeight: CGFloat { self == .standard ? 90 : 78 }
-    var windowRadius: CGFloat {
-        if #available(macOS 27.0, *) {
-            return 20
+    /// 头部总高：拖拽区 + 搜索框 + 分类胶囊
+    var headerHeight: CGFloat {
+        if self == .minimal {
+            return FloatingTheme.compactHeaderHeight + FloatingTheme.compactSearchHeight
+                + FloatingTheme.compactTabSpacing + FloatingTheme.tabBarHeight
+                + FloatingTheme.tabsBottomGap
         }
-        return Const.windowRadis
+        return FloatingTheme.dragHandleHeight
+            + FloatingTheme.searchFieldHeight
+            + FloatingTheme.searchToTabsSpacing
+            + FloatingTheme.tabBarHeight
+            + FloatingTheme.tabsBottomGap
     }
-    var footerHeight: CGFloat { self == .standard ? 32 : 24 }
-    var cardHeight: CGFloat { self == .standard ? 60 : 44 }
-    var cardSpacing: CGFloat { self == .standard ? 6 : 4 }
-    var cardInset: CGFloat { self == .standard ? 10 : 12 }
-    var cardRadius: CGFloat { self == .standard ? Const.radius : 8 }
+
+    /// 窗口圆角
+    var windowRadius: CGFloat {
+        self == .standard ? FloatingTheme.windowRadius : 22
+    }
+
+    var footerHeight: CGFloat { self == .standard ? FloatingTheme.footerHeight : 30 }
+    var cardHeight: CGFloat { self == .standard ? FloatingTheme.rowHeight : 44 }
+    var cardSpacing: CGFloat { self == .standard ? FloatingTheme.rowSpacing : 4 }
+    var cardInset: CGFloat { FloatingTheme.horizontalPadding }
+    var cardRadius: CGFloat { self == .standard ? FloatingTheme.rowRadius : 8 }
+    var contentFont: NSFont { self == .standard ? FloatingTheme.rowTitleFont : FloatingTheme.compactRowFont }
+    var contentLineHeight: CGFloat {
+        self == .standard ? FloatingTheme.rowTitleLineHeight : FloatingTheme.compactRowLineHeight
+    }
+    var contentMaxLines: Int { self == .standard ? FloatingTheme.rowTitleMaxLines : 2 }
 }

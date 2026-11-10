@@ -8,6 +8,7 @@
 import SQLite
 
 enum PasteFilterBuilder {
+    /// 将自动分类与用户筛选合并为查询条件，复用现有分页和实时更新。
     static func buildFilter(
         from criteria: SearchCriteria
     ) -> Expression<Bool>? {
@@ -26,6 +27,9 @@ enum PasteFilterBuilder {
         }
 
         // 类型筛选
+        if let categoryType = criteria.categoryType {
+            clauses.append((Col.tag ?? "") == categoryType.tagValue)
+        }
         if !criteria.selectedTypes.isEmpty {
             var tagValues: [String] = []
             for type in criteria.selectedTypes {

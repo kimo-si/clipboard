@@ -33,6 +33,26 @@ extension TopBarViewModel {
         }
     }
 
+    /// 重新呼出时清除本次搜索条件，保留当前分类标签的查询范围。
+    func resetSearchForPresentation() {
+        query = ""
+        selectedTypes.removeAll()
+        selectedAppIDs.removeAll()
+        selectedDateFilter = nil
+        selectedGroupIds.removeAll()
+        tags.removeAll()
+        if let chip = chipStore.getSelectedChip(), !chip.isSystem {
+            selectedGroupIds.insert(chip.id)
+            addTagForGroup(chip)
+        }
+
+        // 先同步清空输入框，替换尚在等待防抖的旧关键词。
+        clearQueryRequested.send()
+        filterDidChange.send()
+        // 立即恢复当前标签的数据，并取消上次尚未完成的查询。
+        performSearch()
+    }
+
     func resetFilterState() {
         isModeResetting = true
         defer { isModeResetting = false }
@@ -51,30 +71,26 @@ extension TopBarViewModel {
         lastSearchCriteria = nil
     }
 
-    func willSearchCriteriaChange() -> Bool {
-        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let criteria = SearchCriteria(
-            keyword: trimmedQuery,
+    /// 统一构建搜索范围，自动分类与用户手动筛选互不覆盖。
+    func makeSearchCriteria() -> SearchCriteria {
+        SearchCriteria(
+            keyword: query.trimmingCharacters(in: .whitespacesAndNewlines),
             selectedTypes: selectedTypes,
             selectedAppIDs: selectedAppIDs,
             selectedDateFilter: selectedDateFilter,
-            selectedGroupIds: selectedGroupIds
+            selectedGroupIds: selectedGroupIds,
+            categoryType: chipStore.getSelectedChip()?.typeFilter
         )
-        return criteria != lastSearchCriteria
     }
 
-    func performSearch() {
-        let trimmedQuery = query.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
+    /// 检查关键词、标签范围或手动筛选是否发生变化。
+    func willSearchCriteriaChange() -> Bool {
+        makeSearchCriteria() != lastSearchCriteria
+    }
 
-        let criteria = SearchCriteria(
-            keyword: trimmedQuery,
-            selectedTypes: selectedTypes,
-            selectedAppIDs: selectedAppIDs,
-            selectedDateFilter: selectedDateFilter,
-            selectedGroupIds: selectedGroupIds
-        )
+    /// 按当前分类范围刷新数据，全部标签使用原有完整历史列表。
+    func performSearch() {
+        let criteria = makeSearchCriteria()
 
         if criteria == lastSearchCriteria {
             return
@@ -131,7 +147,10 @@ extension TopBarViewModel {
 // MARK: - Drag & Drop
 
 extension TopBarViewModel {
+    /// 只允许将记录归入真实分组或取消归组，自动分类保持只读聚合。
     func assignModelToChip(model: PasteboardModel, chipId: Int) -> Bool {
+        guard let chip = chipStore.chips.first(where: { $0.id == chipId }),
+              chip.acceptsManualAssignment else { return false }
         if model.group == chipId {
             return true
         }
